@@ -42,16 +42,13 @@ pub fn start_gadget(
                 // if it is input report
                 // we need to inject inputs from midi device if we have any
                 if controller_data[0] == 0x30 {
-                    match rx_midi.try_recv() {
-                        Ok(result) => {
-                            debug!("midi_rx -> {:#04X?}", result.data_byte1);
-                            let input_report = InputReport::from(&result);
-                            controller_data[3] = input_report.report[0];
-                            controller_data[4] = input_report.report[1];
-                            controller_data[5] = input_report.report[2];
-                        }
-                        Err(_) => {}
-                    };
+                    if let Ok(result) = rx_midi.try_recv() {
+                        debug!("midi_rx -> {:#04X?}", result.data_byte1);
+                        let input_report = InputReport::from(&result);
+                        controller_data[3] = input_report.report[0];
+                        controller_data[4] = input_report.report[1];
+                        controller_data[5] = input_report.report[2];
+                    }
                 }
 
                 match gadget_device.write(controller_data) {
