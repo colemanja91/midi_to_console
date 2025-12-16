@@ -115,19 +115,16 @@ pub fn start_controller(
             }
         };
 
-        match controller.read() {
-            Ok(buf) => {
-                trace!("controller ->");
-                match tx_gadget.send(buf) {
-                    Ok(()) => {
-                        trace!("tx_gadget <- controller");
-                    }
-                    Err(error) => {
-                        panic!("Cannot send to tx_gadget {}", error);
-                    }
-                };
-            }
-            Err(_) => {}
+        if let Ok(buf) = controller.read() {
+            trace!("controller ->");
+            match tx_gadget.send(buf) {
+                Ok(()) => {
+                    trace!("tx_gadget <- controller");
+                }
+                Err(error) => {
+                    panic!("Cannot send to tx_gadget {}", error);
+                }
+            };
         };
         thread::sleep(wait_ms);
     }
