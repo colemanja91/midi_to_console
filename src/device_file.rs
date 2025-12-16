@@ -19,18 +19,15 @@ impl DeviceFile {
     }
 
     pub fn write(&mut self, data: Vec<u8>) -> Result<(), Error> {
-        match self.fp.write(data.as_ref()) {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Unable to write to {:?}: {} ", self.fp, e)
-            }
-        };
+        if let Err(e) = self.fp.write_all(data.as_ref()) {
+            error!("Unable to write to {:?}: {}", self.fp, e);
+        }
         Ok(())
     }
 
     pub fn read(&mut self) -> Result<Vec<u8>, Error> {
         let mut buf = vec![0u8; 64];
-        self.fp.read(&mut buf)?;
+        self.fp.read_exact(&mut buf)?;
         Ok(buf)
     }
 }
