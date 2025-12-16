@@ -98,17 +98,17 @@ pub struct InputReport {
 ///  =========================================================================================================
 /// | Bytes/Bits |     7    |    6    |     5      |     4      |     3     |     2     |     1     |    0    |
 /// |    0x00    |                                             0x30                                           |
-/// |    0x01	 |                                           Timestamp                                        |
-/// |    0x02	 |                connection_info               |                 battery_level               |
-/// |    0x03	 |    ZR    |    R    | SR (right) | SL (right) |     A     |      B    |     X     |    Y    |
-/// |    0x04	 |   Grip   | (none)  |    Cap     |    Home    |   ThumbL  |   ThumbR  |     +     |    -    |
-/// |    0x05	 |    ZL    |    L	  | SL (left)  | SR (left)  |    Left   |   Right   |    Up     |  Down   |
-/// |    0x06	 |                                          Analog [0]                                        |
-/// |    0x07	 |                                          Analog [1]                                        |
-/// |    0x08	 |                                          Analog [2]                                        |
-/// |    0x09	 |                                          Analog [3]                                        |
-/// |    0x0a	 |                                          Analog [4]                                        |
-/// |    0x0b	 |                                          Analog [5]                                        |
+/// |    0x01    |                                           Timestamp                                        |
+/// |    0x02    |                connection_info               |                 battery_level               |
+/// |    0x03    |    ZR    |    R    | SR (right) | SL (right) |     A     |      B    |     X     |    Y    |
+/// |    0x04    |   Grip   | (none)  |    Cap     |    Home    |   ThumbL  |   ThumbR  |     +     |    -    |
+/// |    0x05    |    ZL    |    L      | SL (left)  | SR (left)  |    Left   |   Right   |    Up     |  Down   |
+/// |    0x06    |                                          Analog [0]                                        |
+/// |    0x07    |                                          Analog [1]                                        |
+/// |    0x08    |                                          Analog [2]                                        |
+/// |    0x09    |                                          Analog [3]                                        |
+/// |    0x0a    |                                          Analog [4]                                        |
+/// |    0x0b    |                                          Analog [5]                                        |
 /// ==========================================================================================================
 ///
 ///
