@@ -2,7 +2,8 @@ extern crate core;
 
 use crate::logging::init_logger;
 use crate::midi::{process_signals, MidiMessageData};
-use crate::threads::{start_controller, start_gadget};
+use crate::threads::controller::start_controller;
+use crate::threads::gadget::start_gadget;
 use core::time;
 use log::LevelFilter;
 use std::fs::OpenOptions;
@@ -15,7 +16,10 @@ mod device_file;
 mod logging;
 mod midi;
 mod nscontroller;
-mod threads;
+mod threads {
+    pub mod gadget;
+    pub mod controller;
+}
 
 fn reconnect_controller() {
     // Disconnect gadget from USB OTG port
