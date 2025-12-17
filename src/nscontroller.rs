@@ -186,3 +186,46 @@ impl InputReport {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::midi::MidiMessageTypes;
+
+    #[test]
+    fn input_report_new_has_expected_default() {
+        let r = InputReport::new();
+        assert_eq!(r.report, [0x00, 0x80, 0x00]);
+    }
+
+    #[test]
+    fn press_single_button_sets_bit() {
+        let mut r = InputReport::new();
+        // Button::Y is in byte 0 with offset 0
+        r.press(&Vec::from([Button::Y])).expect("press failed");
+        assert_eq!(r.report[0] & 0x01, 0x01);
+    }
+
+    #[test]
+    fn press_multiple_buttons_sets_bits_across_bytes() {
+        let mut r = InputReport::new();
+        let keys = Vec::from([Button::Y, Button::Plus, Button::ZL]);
+        r.press(&keys).expect("press failed");
+
+        // Y -> byte0 offset 0 => bit 0
+        assert_eq!(r.report[0] & 0x01, 0x01);
+        // Plus -> byte1 offset 1 => bit 1
+        assert_eq!(r.report[1] & 0x02, 0x02);
+        // ZL -> byte2 offset 7 => bit 7
+        assert_eq!(r.report[2] & 0x80, 0x80);
+    }
+
+    #[test]
+    fn from_midi_message_uses_mapping() {
+        // data_byte1 0x06 maps to Button::DpadDown per MIDI_TO_INPUT
+        let midi = crate::midi::MidiMessageData { channel: 0, status_byte: MidiMessageTypes::NoteOn, data_byte1: 0x06, data_byte2: 0 };
+        let r = InputReport::from(&midi);
+        // DpadDown is in byte 2 offset 0
+        assert_eq!(r.report, [0x00, 0x80, 0x01]);
+    }
+}

@@ -61,22 +61,22 @@ pub fn process_signals(position: usize, tx: Sender<MidiMessageData>) -> Result<(
     }
 }
 
-/// Structure to store MIDI data packet
-/// Packet consists of 3 bytes
-///     0 - Status byte + channel
-///     1 - Data byte 1
-///     2 - Data byte 2
-///```
-/// Voice Message           Status Byte      Data Byte1          Data Byte2
-/// -------------           -----------   -----------------   -----------------
-/// Note off                      8x      Key number          Note Off velocity
-/// Note on                       9x      Key number          Note on velocity
-/// Polyphonic Key Pressure       Ax      Key number          Amount of pressure
-/// Control Change                Bx      Controller number   Controller value
-/// Program Change                Cx      Program number      None
-/// Channel Pressure              Dx      Pressure value      None
-/// Pitch Bend                    Ex      MSB                 LSB
-/// ```
+// Structure to store MIDI data packet
+// Packet consists of 3 bytes
+//     0 - Status byte + channel
+//     1 - Data byte 1
+//     2 - Data byte 2
+//```
+// Voice Message           Status Byte      Data Byte1          Data Byte2
+// -------------           -----------   -----------------   -----------------
+// Note off                      8x      Key number          Note Off velocity
+// Note on                       9x      Key number          Note on velocity
+// Polyphonic Key Pressure       Ax      Key number          Amount of pressure
+// Control Change                Bx      Controller number   Controller value
+// Program Change                Cx      Program number      None
+// Channel Pressure              Dx      Pressure value      None
+// Pitch Bend                    Ex      MSB                 LSB
+// ```
 
 #[derive(Clone)]
 pub struct MidiMessageData {
@@ -87,7 +87,7 @@ pub struct MidiMessageData {
 }
 
 impl MidiMessageData {
-    fn new(byte0: u8, byte1: u8, byte2: u8) -> Result<MidiMessageData, Box<dyn Error>> {
+    pub fn new(byte0: u8, byte1: u8, byte2: u8) -> Result<MidiMessageData, Box<dyn Error>> {
         let midi_type = match MidiMessageTypes::try_from(byte0 >> 4) {
             Ok(v) => v,
             Err(_) => return Err("Incorrect MidiMessageType".into()),
