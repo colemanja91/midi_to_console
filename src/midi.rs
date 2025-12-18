@@ -4,7 +4,7 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
 
-use log::{info, trace};
+use log::{error, info, trace};
 
 use midir::{Ignore, MidiInput};
 
@@ -45,26 +45,14 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
         in_port,
         "midir-read-input",
         move |_, message: &[u8], _| {
-            let midi_data = MidiMessageData::new(message[0], message[1], message[2]).unwrap();
-            if midi_data.should_add_midi_message() {
-                // Only add if note does not already exist
-                if !midi_note_on_messages
-                    .iter()
-                    .any(|x| x.data_byte1 == midi_data.data_byte1)
-                {
-                    midi_note_on_messages.push(midi_data.clone());
+            match process_callback(message, midi_note_on_messages.clone(), tx.clone()) {
+                Ok(value) => {
+                    midi_note_on_messages = value;
+                }
+                Err(error) => {
+                    error!("Error processing callback: {}", error);
                 }
             }
-            if midi_data.should_remove_midi_message() {
-                // Currently all MIDI channels will be "squished" in the
-                // output to controller, so no need to filter by channel
-                trace!("removing <- {:#04X?}", midi_data.data_byte1);
-                midi_note_on_messages.retain(|x| x.data_byte1 != midi_data.data_byte1);
-            }
-
-            // Send twice to ensure Gadget thread picks up the message
-            tx.send(midi_note_on_messages.clone()).unwrap();
-            tx.send(midi_note_on_messages.clone()).unwrap();
         },
         (),
     )?;
@@ -72,6 +60,33 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
     loop {
         thread::sleep(Duration::from_millis(1));
     }
+}
+
+pub(crate) fn process_callback(message: &[u8], persistent_messages: Vec<MidiMessageData>, tx: Sender<Vec<MidiMessageData>>) -> Result<Vec<MidiMessageData>, Box<dyn Error>> {
+    let mut return_messages = persistent_messages.clone();
+    let midi_data = MidiMessageData::new(message[0], message[1], message[2]).unwrap();
+    if midi_data.should_add_midi_message() {
+        // Only add if note does not already exist
+        if !return_messages
+            .iter()
+            .any(|x| x.data_byte1 == midi_data.data_byte1)
+        {
+            return_messages.push(midi_data.clone());
+        }
+    }
+
+    if midi_data.should_remove_midi_message() {
+        // Currently all MIDI channels will be "squished" in the
+        // output to controller, so no need to filter by channel
+        trace!("removing <- {:#04X?}", midi_data.data_byte1);
+        return_messages.retain(|x| x.data_byte1 != midi_data.data_byte1);
+    }
+
+    // Send twice to ensure Gadget thread picks up the message
+    tx.send(return_messages.clone()).unwrap();
+    tx.send(return_messages.clone()).unwrap();
+
+    Ok(return_messages)
 }
 
 // Structure to store MIDI data packet
@@ -159,6 +174,7 @@ impl TryFrom<u8> for MidiMessageTypes {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc;
 
     #[test]
     fn should_add_midi_message_cases() {
@@ -181,5 +197,93 @@ mod tests {
         let m = MidiMessageData::new((MidiMessageTypes::ControlChange as u8) << 4, 0x01, 0x7F).unwrap();
         assert!(!m.should_add_midi_message());
         assert!(!m.should_remove_midi_message());
+    }
+
+    #[test]
+    fn process_callback_adds_message_and_sends() {
+        let (tx, rx) = mpsc::channel();
+        let persistent: Vec<MidiMessageData> = Vec::new();
+        let msg = [(MidiMessageTypes::NoteOn as u8) << 4, 0x3C, 0x40];
+
+        let res = process_callback(&msg, persistent, tx).expect("callback failed");
+        // returned state should contain the note
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].data_byte1, 0x3C);
+
+        // two sends were made; both should contain one element with the same note
+        let first = rx.recv().expect("no first send");
+        let second = rx.recv().expect("no second send");
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert_eq!(first[0].data_byte1, 0x3C);
+    }
+
+    #[test]
+    fn process_callback_add_message_not_duplicated() {
+        let (tx, rx) = mpsc::channel();
+        // persistent already contains the note
+        let existing = MidiMessageData::new((MidiMessageTypes::NoteOn as u8) << 4, 0x3C, 0x40).unwrap();
+        let persistent = vec![existing.clone()];
+        let msg = [(MidiMessageTypes::NoteOn as u8) << 4, 0x3C, 0x40];
+
+        let res = process_callback(&msg, persistent, tx).expect("callback failed");
+        // should not duplicate
+        assert_eq!(res.len(), 1);
+        let first = rx.recv().expect("no first send");
+        let second = rx.recv().expect("no second send");
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+    }
+
+    #[test]
+    fn process_callback_remove_not_present_no_error() {
+        let (tx, rx) = mpsc::channel();
+        let persistent: Vec<MidiMessageData> = Vec::new();
+        let msg = [(MidiMessageTypes::NoteOff as u8) << 4, 0x3C, 0x00];
+
+        let res = process_callback(&msg, persistent, tx).expect("callback failed");
+        assert!(res.is_empty());
+        // two sends of empty vectors
+        let first = rx.recv().expect("no first send");
+        let second = rx.recv().expect("no second send");
+        assert!(first.is_empty());
+        assert!(second.is_empty());
+    }
+
+    #[test]
+    fn process_callback_remove_present() {
+        let (tx, rx) = mpsc::channel();
+        let existing = MidiMessageData::new((MidiMessageTypes::NoteOn as u8) << 4, 0x3C, 0x40).unwrap();
+        let persistent = vec![existing];
+        let msg = [(MidiMessageTypes::NoteOff as u8) << 4, 0x3C, 0x00];
+
+        let res = process_callback(&msg, persistent, tx).expect("callback failed");
+        assert!(res.is_empty());
+        let first = rx.recv().expect("no first send");
+        let second = rx.recv().expect("no second send");
+        assert!(first.is_empty());
+        assert!(second.is_empty());
+    }
+
+    #[test]
+    fn process_callback_persistence_across_iterations() {
+        // First call: add note
+        let (tx1, rx1) = mpsc::channel();
+        let persistent: Vec<MidiMessageData> = Vec::new();
+        let add_msg = [(MidiMessageTypes::NoteOn as u8) << 4, 0x3C, 0x40];
+        let res1 = process_callback(&add_msg, persistent, tx1).expect("callback failed");
+        assert_eq!(res1.len(), 1);
+        // drain sends
+        let _ = rx1.recv().unwrap();
+        let _ = rx1.recv().unwrap();
+
+        // Second call: no relevant midi message (ControlChange) but state should persist
+        let (tx2, rx2) = mpsc::channel();
+        let heartbeat = [(MidiMessageTypes::ControlChange as u8) << 4, 0x01, 0x7F];
+        let res2 = process_callback(&heartbeat, res1.clone(), tx2).expect("callback failed");
+        // res2 should still contain the previously added note
+        assert_eq!(res2.len(), 1);
+        let first = rx2.recv().expect("no first send");
+        assert_eq!(first.len(), 1);
     }
 }
