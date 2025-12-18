@@ -8,13 +8,6 @@ use log::{info, trace};
 
 use midir::{Ignore, MidiInput};
 
-fn should_remove_midi_message(midi_message: MidiMessageData) -> bool {
-    // Velocity 0 is treated same as MidiMessageTypes::NoteOff,
-    // per MIDI spec.
-    (midi_message.status_byte == MidiMessageTypes::NoteOn && midi_message.data_byte2 == 0x00u8) 
-        || midi_message.status_byte == MidiMessageTypes::NoteOff
-}
-
 /// This thread has infinite loop in the end to process midi forever
 pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir reading input")?;
