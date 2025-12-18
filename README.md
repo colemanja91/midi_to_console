@@ -2,7 +2,7 @@
 
 Forked from https://github.com/Shtsh/midi_to_console
 
-Simple middleware between nintendo switch and contoller 
+Simple middleware between nintendo switch and controller 
 allowing injecting midi input to send input to the console.
 
 Currently setup to use a static mapping of MIDI pitches to Switch Controller buttons.
