@@ -33,7 +33,6 @@ fn midi_message_data_parsing_valid() {
     let byte2 = 0x7Fu8;
 
     let parsed = MidiMessageData::new(byte0, byte1, byte2).expect("parse should succeed");
-    assert_eq!(parsed.channel, 0x3);
     assert_eq!(parsed.status_byte, MidiMessageTypes::NoteOn);
     assert_eq!(parsed.data_byte1, byte1);
     assert_eq!(parsed.data_byte2, byte2);

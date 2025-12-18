@@ -38,21 +38,33 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
     let in_port_name = midi_in.port_name(in_port)?;
     info!("Connecting to {}", in_port_name);
 
+    let mut midi_note_on_messages: Vec<MidiMessageData> = Vec::new();
+
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
     let _conn_in = midi_in.connect(
         in_port,
         "midir-read-input",
         move |_, message: &[u8], _| {
             let midi_data = MidiMessageData::new(message[0], message[1], message[2]).unwrap();
-            if midi_data.status_byte == MidiMessageTypes::NoteOn {
-                trace!("tx_midi <- {:#04X?}", midi_data.data_byte1);
-                let midi_messages = vec![midi_data.clone()];
-                // sending the midi messages vec several times
-                // to modify several reports as adding to one InputReport is not enough
-                // for game to detect the hit
-                tx.send(midi_messages.clone()).unwrap();
-                tx.send(midi_messages).unwrap();
+            if midi_data.should_add_midi_message() {
+                // Only add if note does not already exist
+                if !midi_note_on_messages
+                    .iter()
+                    .any(|x| x.data_byte1 == midi_data.data_byte1)
+                {
+                    midi_note_on_messages.push(midi_data.clone());
+                }
             }
+            if midi_data.should_remove_midi_message() {
+                // Currently all MIDI channels will be "squished" in the
+                // output to controller, so no need to filter by channel
+                trace!("removing <- {:#04X?}", midi_data.data_byte1);
+                midi_note_on_messages.retain(|x| x.data_byte1 != midi_data.data_byte1);
+            }
+
+            // Send twice to ensure Gadget thread picks up the message
+            tx.send(midi_note_on_messages.clone()).unwrap();
+            tx.send(midi_note_on_messages.clone()).unwrap();
         },
         (),
     )?;
@@ -81,7 +93,6 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
 
 #[derive(Clone)]
 pub struct MidiMessageData {
-    pub channel: u8,
     pub status_byte: MidiMessageTypes,
     pub data_byte1: u8,
     pub data_byte2: u8,
@@ -94,11 +105,22 @@ impl MidiMessageData {
             Err(_) => return Err("Incorrect MidiMessageType".into()),
         };
         Ok(MidiMessageData {
-            channel: byte0 & 0x0F,
             status_byte: midi_type,
             data_byte1: byte1,
             data_byte2: byte2,
         })
+    }
+
+    pub fn should_add_midi_message(&self) -> bool {
+        self.status_byte == MidiMessageTypes::NoteOn
+            && self.data_byte2 != 0x00u8
+    }
+
+    pub fn should_remove_midi_message(&self) -> bool {
+        // Velocity 0 is treated same as MidiMessageTypes::NoteOff,
+        // per MIDI spec.
+        (self.status_byte == MidiMessageTypes::NoteOn && self.data_byte2 == 0x00u8)
+            || self.status_byte == MidiMessageTypes::NoteOff
     }
 }
 

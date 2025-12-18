@@ -1,9 +1,11 @@
 # About
-Simple middleware between nintendo switch and contoller 
+
+Forked from https://github.com/Shtsh/midi_to_console
+
+Simple middleware between nintendo switch and controller 
 allowing injecting midi input to send input to the console.
 
-The main purpose is to use real drum ekit with Taiko no Tatsujin on Nintendo Switch.
-But it is possible to use any MIDI controller to control the console.
+Currently setup to use a static mapping of MIDI pitches to Switch Controller buttons.
 
 # Requirements
 * Nintendo Switch
@@ -47,3 +49,4 @@ After reboot everything should be up an running
 # Acknowledges
 
 Used NS protocol analysis https://www.mzyy94.com/blog/2020/03/20/nintendo-switch-pro-controller-usb-gadget/
+Thanks Shtsh for the original work on this repo

@@ -35,16 +35,22 @@ pub fn start_gadget(
     let mut gadget_device = DeviceFile::new("/dev/hidg0", true).unwrap();
 
     loop {
+        // Always receive MIDI messages at the top of the loop.
+        // Drain all available messages so we don't miss any button states.
+        let mut midi_messages = Vec::new();
+        while let Ok(batch) = rx_midi.try_recv() {
+            midi_messages.extend(batch);
+        }
+
         match rx_gadget.try_recv() {
             Ok(mut controller_data) => {
                 trace!("rx_gadget -> gadget {:02X?}", controller_data);
-                // We received data from controller
-                // if it is input report
-                // we need to inject inputs from midi device if we have any
+                // Check if input report from controller
                 if controller_data[0] == 0x30 {
-                    if let Ok(result) = rx_midi.try_recv() {
+                    // Apply MIDI state if any
+                    if !midi_messages.is_empty() {
                         let mut combined_report = [0u8; 3];
-                        for midi_data in result {
+                        for midi_data in midi_messages {
                             debug!("midi_rx -> {:#04X?}", midi_data.data_byte1);
                             let input_report = InputReport::from(&midi_data);
                             combined_report[0] |= input_report.report[0];
