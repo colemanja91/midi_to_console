@@ -38,6 +38,8 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
     let in_port_name = midi_in.port_name(in_port)?;
     info!("Connecting to {}", in_port_name);
 
+    let mut midi_note_on_messages: Vec<MidiMessageData> = Vec::new();
+
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
     let _conn_in = midi_in.connect(
         in_port,
@@ -46,13 +48,15 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
             let midi_data = MidiMessageData::new(message[0], message[1], message[2]).unwrap();
             if midi_data.status_byte == MidiMessageTypes::NoteOn {
                 trace!("tx_midi <- {:#04X?}", midi_data.data_byte1);
-                let midi_messages = vec![midi_data.clone()];
-                // sending the midi messages vec several times
-                // to modify several reports as adding to one InputReport is not enough
-                // for game to detect the hit
-                tx.send(midi_messages.clone()).unwrap();
-                tx.send(midi_messages).unwrap();
+                midi_note_on_messages.push(midi_data.clone());
             }
+            if midi_data.status_byte == MidiMessageTypes::NoteOff {
+                midi_note_on_messages.retain(|x| x.data_byte1 != midi_data.data_byte1);
+            }
+
+            // Send twice to ensure Gadget thread picks up the message
+            tx.send(midi_note_on_messages.clone()).unwrap();
+            tx.send(midi_note_on_messages.clone()).unwrap();
         },
         (),
     )?;
