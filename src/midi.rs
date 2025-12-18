@@ -104,7 +104,6 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
 
 #[derive(Clone)]
 pub struct MidiMessageData {
-    pub channel: u8,
     pub status_byte: MidiMessageTypes,
     pub data_byte1: u8,
     pub data_byte2: u8,
@@ -117,7 +116,6 @@ impl MidiMessageData {
             Err(_) => return Err("Incorrect MidiMessageType".into()),
         };
         Ok(MidiMessageData {
-            channel: byte0 & 0x0F,
             status_byte: midi_type,
             data_byte1: byte1,
             data_byte2: byte2,
