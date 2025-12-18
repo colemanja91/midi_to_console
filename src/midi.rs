@@ -155,3 +155,31 @@ impl TryFrom<u8> for MidiMessageTypes {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_add_midi_message_cases() {
+        // NoteOn with non-zero velocity -> should add
+        let m = MidiMessageData::new((MidiMessageTypes::NoteOn as u8) << 4, 0x3C, 0x40).unwrap();
+        assert!(m.should_add_midi_message());
+        assert!(!m.should_remove_midi_message());
+
+        // NoteOn with zero velocity -> treated as NoteOff -> should not add, should remove
+        let m = MidiMessageData::new((MidiMessageTypes::NoteOn as u8) << 4, 0x3C, 0x00).unwrap();
+        assert!(!m.should_add_midi_message());
+        assert!(m.should_remove_midi_message());
+
+        // NoteOff -> should not add, should remove
+        let m = MidiMessageData::new((MidiMessageTypes::NoteOff as u8) << 4, 0x3C, 0x00).unwrap();
+        assert!(!m.should_add_midi_message());
+        assert!(m.should_remove_midi_message());
+
+        // Other message (ControlChange) -> should not add or remove
+        let m = MidiMessageData::new((MidiMessageTypes::ControlChange as u8) << 4, 0x01, 0x7F).unwrap();
+        assert!(!m.should_add_midi_message());
+        assert!(!m.should_remove_midi_message());
+    }
+}
