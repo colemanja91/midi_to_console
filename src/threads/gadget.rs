@@ -35,9 +35,14 @@ pub fn start_gadget(
     let mut gadget_device = DeviceFile::new("/dev/hidg0", true).unwrap();
 
     loop {
-        // Always receive MIDI messages at the top of the loop
-        // to ensure we have the latest MIDI state
-        let midi_messages = rx_midi.try_recv().unwrap_or_default();
+        // Always receive MIDI messages at the top of the loop.
+        // Drain all available messages so we don't miss any button states.
+        let mut midi_messages = Vec::new();
+        // Set a timeout so we don't spin indefinitely
+        let _ = rx_midi.recv_timeout(time::Duration::from_millis(0));
+        while let Ok(batch) = rx_midi.try_recv() {
+            midi_messages.extend(batch);
+        }
 
         match rx_gadget.try_recv() {
             Ok(mut controller_data) => {
