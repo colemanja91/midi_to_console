@@ -46,8 +46,7 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
             let midi_data = MidiMessageData::new(message[0], message[1], message[2]).unwrap();
             if midi_data.status_byte == MidiMessageTypes::NoteOn {
                 trace!("tx_midi <- {:#04X?}", midi_data.data_byte1);
-                let mut midi_messages = Vec::new();
-                midi_messages.push(midi_data.clone());
+                let midi_messages = vec![midi_data.clone()];
                 // sending the midi messages vec several times
                 // to modify several reports as adding to one InputReport is not enough
                 // for game to detect the hit
