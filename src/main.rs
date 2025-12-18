@@ -61,7 +61,7 @@ fn main() {
     let (tx_gadget, rx_gadget): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
 
     // channel to receive MidiMessageData
-    let (tx_midi, rx_midi): (Sender<MidiMessageData>, Receiver<MidiMessageData>) = mpsc::channel();
+    let (tx_midi, rx_midi): (Sender<Vec<MidiMessageData>>, Receiver<Vec<MidiMessageData>>) = mpsc::channel();
 
     // thread to process usb gadget data via gadgetfs
     thread::Builder::new()

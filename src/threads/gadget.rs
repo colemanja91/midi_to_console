@@ -28,7 +28,7 @@ use std::thread;
 pub fn start_gadget(
     tx_controller: Sender<Vec<u8>>,
     rx_gadget: Receiver<Vec<u8>>,
-    rx_midi: Receiver<MidiMessageData>,
+    rx_midi: Receiver<Vec<MidiMessageData>>,
 ) -> Result<(), Box<dyn Error>> {
     info!("Starting gadget thread /dev/hidg0");
     let wait_ms = time::Duration::from_millis(5);
@@ -43,11 +43,18 @@ pub fn start_gadget(
                 // we need to inject inputs from midi device if we have any
                 if controller_data[0] == 0x30 {
                     if let Ok(result) = rx_midi.try_recv() {
-                        debug!("midi_rx -> {:#04X?}", result.data_byte1);
-                        let input_report = InputReport::from(&result);
-                        controller_data[3] = input_report.report[0];
-                        controller_data[4] = input_report.report[1];
-                        controller_data[5] = input_report.report[2];
+                        let mut combined_report = [0u8; 3];
+                        for midi_data in result {
+                            debug!("midi_rx -> {:#04X?}", midi_data.data_byte1);
+                            let input_report = InputReport::from(&midi_data);
+                            combined_report[0] |= input_report.report[0];
+                            combined_report[1] |= input_report.report[1];
+                            combined_report[2] |= input_report.report[2];
+                        };
+
+                        controller_data[3] = combined_report[0];
+                        controller_data[4] = combined_report[1];
+                        controller_data[5] = combined_report[2];
                     }
                 }
 
