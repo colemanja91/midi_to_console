@@ -8,6 +8,13 @@ use log::{info, trace};
 
 use midir::{Ignore, MidiInput};
 
+fn should_remove_midi_message(midi_message: MidiMessageData) -> bool {
+    // Velocity 0 is treated same as MidiMessageTypes::NoteOff,
+    // per MIDI spec.
+    (midi_message.status_byte == MidiMessageTypes::NoteOn && midi_message.data_byte2 == 0x00u8) 
+        || midi_message.status_byte == MidiMessageTypes::NoteOff
+}
+
 /// This thread has infinite loop in the end to process midi forever
 pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir reading input")?;
@@ -46,27 +53,16 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
         "midir-read-input",
         move |_, message: &[u8], _| {
             let midi_data = MidiMessageData::new(message[0], message[1], message[2]).unwrap();
-            if midi_data.status_byte == MidiMessageTypes::NoteOn {
-                if midi_data.data_byte2 != 0x00u8 {
-                    trace!("adding <- {:#04X?}", midi_data.data_byte1);
-
-                    // Only add if note does not already exist
-                    if !midi_note_on_messages
-                        .iter()
-                        .any(|x| x.data_byte1 == midi_data.data_byte1)
-                    {
-                        midi_note_on_messages.push(midi_data.clone());
-                    }
-                } else {
-                    // Velocity 0 is treated same as MidiMessageTypes::NoteOff,
-                    // per MIDI spec.
-                    // Currently all MIDI channels will be "squished" in the
-                    // output to controller, so no need to filter by channel
-                    trace!("removing <- {:#04X?}", midi_data.data_byte1);
-                    midi_note_on_messages.retain(|x| x.data_byte1 != midi_data.data_byte1);
+            if midi_data.should_add_midi_message() {
+                // Only add if note does not already exist
+                if !midi_note_on_messages
+                    .iter()
+                    .any(|x| x.data_byte1 == midi_data.data_byte1)
+                {
+                    midi_note_on_messages.push(midi_data.clone());
                 }
             }
-            if midi_data.status_byte == MidiMessageTypes::NoteOff {
+            if midi_data.should_remove_midi_message() {
                 // Currently all MIDI channels will be "squished" in the
                 // output to controller, so no need to filter by channel
                 trace!("removing <- {:#04X?}", midi_data.data_byte1);
@@ -120,6 +116,18 @@ impl MidiMessageData {
             data_byte1: byte1,
             data_byte2: byte2,
         })
+    }
+
+    pub fn should_add_midi_message(&self) -> bool {
+        self.status_byte == MidiMessageTypes::NoteOn 
+            && self.data_byte2 != 0x00u8
+    }
+
+    pub fn should_remove_midi_message(&self) -> bool {
+        // Velocity 0 is treated same as MidiMessageTypes::NoteOff,
+        // per MIDI spec.
+        (self.status_byte == MidiMessageTypes::NoteOn && self.data_byte2 == 0x00u8) 
+            || self.status_byte == MidiMessageTypes::NoteOff
     }
 }
 
