@@ -9,7 +9,7 @@ use log::{info, trace};
 use midir::{Ignore, MidiInput};
 
 /// This thread has infinite loop in the end to process midi forever
-pub fn process_signals(position: usize, tx: Sender<MidiMessageData>) -> Result<(), Box<dyn Error>> {
+pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
@@ -49,8 +49,10 @@ pub fn process_signals(position: usize, tx: Sender<MidiMessageData>) -> Result<(
                 // sending the midi data several times
                 // to modify several reports as adding to one InputReport is not enough
                 // for game to detect the hit
-                tx.send(midi_data.clone()).unwrap();
-                tx.send(midi_data).unwrap();
+                let mut midi_messages = Vec::new();
+                midi_messages.push(midi_data.clone());
+                tx.send(midi_messages.clone()).unwrap();
+                tx.send(midi_messages).unwrap();
             }
         },
         (),
