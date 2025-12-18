@@ -4,7 +4,7 @@ use log::error;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub enum Button {
     Y,
     X,
@@ -28,7 +28,41 @@ pub enum Button {
     ZL,
 }
 
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
+pub enum Pitch {
+    C,
+    CSharp,
+    D,
+    DSharp,
+    E,
+    F,
+    FSharp,
+    G,
+    GSharp,
+    A,
+    ASharp,
+    B,
+}
+
 lazy_static! {
+    static ref INDEX_TO_PITCH: HashMap<u8, Pitch> = {
+        let mut m = HashMap::new();
+        m.insert(0, Pitch::C);
+        m.insert(1, Pitch::CSharp);
+        m.insert(2, Pitch::D);
+        m.insert(3, Pitch::DSharp);
+        m.insert(4, Pitch::E);
+        m.insert(5, Pitch::F);
+        m.insert(6, Pitch::FSharp);
+        m.insert(7, Pitch::G);
+        m.insert(8, Pitch::GSharp);
+        m.insert(9, Pitch::A);
+        m.insert(10, Pitch::ASharp);
+        m.insert(11, Pitch::B);
+
+        m
+    };
+
     static ref KEYS_IN_BYTE1: HashSet<Button> = HashSet::from([
         Button::Y, Button::X, Button::B,
         Button::A, Button::R, Button::ZR,
@@ -68,26 +102,33 @@ lazy_static! {
         m
     };
 
-    /// Taiko no Tatsujin configuration
-    /// Controller Type 1
-    /// R, L = Rim left and Rim right
-    /// Down and B - Center Left and Right
-    static ref MIDI_TO_INPUT: HashMap<u8, Vec<Button>> = {
+    static ref PITCH_TO_BUTTON: HashMap<Pitch, Button> = {
         let mut m = HashMap::new();
-        // Center with one hand
-        m.insert(0x06u8, Vec::from([Button::DpadDown])); // F#2
-        // Center with two hands
-        // Actually this is one midi note which represents rimshot
-        // But we need to press two buttons on virtual controller
-        m.insert(0x28u8, Vec::from([Button::B, Button::DpadDown]));
-        m.insert(0x25u8, Vec::from([Button::B, Button::DpadDown]));
-        // Rim with one hand
-        m.insert(0x30u8, Vec::from([Button::R]));
-        // Rim with two hands
-        m.insert(0x51u8, Vec::from([Button::R, Button::L]));
-        m.insert(0x52u8, Vec::from([Button::R, Button::L]));
+        m.insert(Pitch::C, Button::Y);
+        m.insert(Pitch::CSharp, Button::X);
+        m.insert(Pitch::D, Button::B);
+        m.insert(Pitch::DSharp, Button::A);
+        m.insert(Pitch::E, Button::R);
+        m.insert(Pitch::F, Button::ZR);
+        m.insert(Pitch::FSharp, Button::L);
+        m.insert(Pitch::G, Button::ZL);
+        m.insert(Pitch::GSharp, Button::DpadDown);
+        m.insert(Pitch::A, Button::DpadUp);
+        m.insert(Pitch::ASharp, Button::DpadLeft);
+        m.insert(Pitch::B, Button::DpadRight);
         m
     };
+}
+
+impl Pitch {
+    pub fn from_midi(midi_data: &MidiMessageData) -> Result<Pitch, Box<dyn Error>> {
+        let note_number_mod = midi_data.data_byte1 % 12;
+
+        match INDEX_TO_PITCH.get(&note_number_mod) {
+            Some(pitch) => Ok(pitch.clone()),
+            None => Err(format!("Cannot find pitch for data byte {:?}", midi_data.data_byte1).into()),
+        }
+    }
 }
 
 pub struct InputReport {
@@ -136,18 +177,28 @@ impl InputReport {
 
     pub fn from(midi_data: &MidiMessageData) -> InputReport {
         let mut input_report = InputReport::new();
-        let pressed_keys = match MIDI_TO_INPUT.get(&midi_data.data_byte1) {
-            Some(value) => value,
-            None => {
+        let pressed_pitch = match Pitch::from_midi(midi_data) {
+            Ok(value) => value,
+            Err(_error) => {
                 error!(
-                    "Unable to find note {:#04X?} in MIDI_TO_INPUT",
+                    "Unable to find pitch for {:#04X?}",
                     midi_data.data_byte1
                 );
                 return input_report;
             }
         };
+        let pressed_button = match PITCH_TO_BUTTON.get(&pressed_pitch) {
+            Some(value) => value,
+            None => {
+                error!(
+                    "Unable to find corresponding button for {:#04X?}",
+                    pressed_pitch
+                );
+                return input_report;
+            }
+        };
 
-        input_report.press(pressed_keys).unwrap();
+        input_report.press_one(pressed_button).unwrap();
         input_report
     }
 
@@ -178,13 +229,6 @@ impl InputReport {
         };
         Ok(())
     }
-
-    pub fn press(&mut self, keys: &Vec<Button>) -> Result<(), Box<dyn Error>> {
-        for key in keys {
-            self.press_one(key)?;
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -199,33 +243,11 @@ mod tests {
     }
 
     #[test]
-    fn press_single_button_sets_bit() {
-        let mut r = InputReport::new();
-        // Button::Y is in byte 0 with offset 0
-        r.press(&Vec::from([Button::Y])).expect("press failed");
-        assert_eq!(r.report[0] & 0x01, 0x01);
-    }
-
-    #[test]
-    fn press_multiple_buttons_sets_bits_across_bytes() {
-        let mut r = InputReport::new();
-        let keys = Vec::from([Button::Y, Button::Plus, Button::ZL]);
-        r.press(&keys).expect("press failed");
-
-        // Y -> byte0 offset 0 => bit 0
-        assert_eq!(r.report[0] & 0x01, 0x01);
-        // Plus -> byte1 offset 1 => bit 1
-        assert_eq!(r.report[1] & 0x02, 0x02);
-        // ZL -> byte2 offset 7 => bit 7
-        assert_eq!(r.report[2] & 0x80, 0x80);
-    }
-
-    #[test]
     fn from_midi_message_uses_mapping() {
         // data_byte1 0x06 maps to Button::DpadDown per MIDI_TO_INPUT
-        let midi = crate::midi::MidiMessageData { channel: 0, status_byte: MidiMessageTypes::NoteOn, data_byte1: 0x06, data_byte2: 0 };
+        let midi = crate::midi::MidiMessageData { channel: 0, status_byte: MidiMessageTypes::NoteOn, data_byte1: 0x06u8, data_byte2: 0 };
         let r = InputReport::from(&midi);
         // DpadDown is in byte 2 offset 0
-        assert_eq!(r.report, [0x00, 0x80, 0x01]);
+        assert_eq!(r.report, [0x00, 0x80, 0x40]);
     }
 }
