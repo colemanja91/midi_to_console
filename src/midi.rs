@@ -112,14 +112,14 @@ impl MidiMessageData {
     }
 
     pub fn should_add_midi_message(&self) -> bool {
-        self.status_byte == MidiMessageTypes::NoteOn 
+        self.status_byte == MidiMessageTypes::NoteOn
             && self.data_byte2 != 0x00u8
     }
 
     pub fn should_remove_midi_message(&self) -> bool {
         // Velocity 0 is treated same as MidiMessageTypes::NoteOff,
         // per MIDI spec.
-        (self.status_byte == MidiMessageTypes::NoteOn && self.data_byte2 == 0x00u8) 
+        (self.status_byte == MidiMessageTypes::NoteOn && self.data_byte2 == 0x00u8)
             || self.status_byte == MidiMessageTypes::NoteOff
     }
 }
