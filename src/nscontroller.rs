@@ -244,10 +244,10 @@ mod tests {
 
     #[test]
     fn from_midi_message_uses_mapping() {
-        // data_byte1 0x06 maps to Button::DpadDown per MIDI_TO_INPUT
+        // data_byte1 0x06u8 maps to Button::L per MIDI_TO_INPUT
         let midi = crate::midi::MidiMessageData { channel: 0, status_byte: MidiMessageTypes::NoteOn, data_byte1: 0x06u8, data_byte2: 0 };
         let r = InputReport::from(&midi);
-        // DpadDown is in byte 2 offset 0
+        // L is in byte 2 offset 6
         assert_eq!(r.report, [0x00, 0x80, 0x40]);
     }
 }
