@@ -47,10 +47,29 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
         move |_, message: &[u8], _| {
             let midi_data = MidiMessageData::new(message[0], message[1], message[2]).unwrap();
             if midi_data.status_byte == MidiMessageTypes::NoteOn {
-                trace!("tx_midi <- {:#04X?}", midi_data.data_byte1);
-                midi_note_on_messages.push(midi_data.clone());
+                if midi_data.data_byte2 != 0x00u8 {
+                    trace!("adding <- {:#04X?}", midi_data.data_byte1);
+
+                    // Only add if note does not already exist
+                    if !midi_note_on_messages
+                        .iter()
+                        .any(|x| x.data_byte1 == midi_data.data_byte1)
+                    {
+                        midi_note_on_messages.push(midi_data.clone());
+                    }
+                } else {
+                    // Velocity 0 is treated same as MidiMessageTypes::NoteOff,
+                    // per MIDI spec.
+                    // Currently all MIDI channels will be "squished" in the
+                    // output to controller, so no need to filter by channel
+                    trace!("removing <- {:#04X?}", midi_data.data_byte1);
+                    midi_note_on_messages.retain(|x| x.data_byte1 != midi_data.data_byte1);
+                }
             }
             if midi_data.status_byte == MidiMessageTypes::NoteOff {
+                // Currently all MIDI channels will be "squished" in the
+                // output to controller, so no need to filter by channel
+                trace!("removing <- {:#04X?}", midi_data.data_byte1);
                 midi_note_on_messages.retain(|x| x.data_byte1 != midi_data.data_byte1);
             }
 
