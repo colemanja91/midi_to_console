@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::{convert::TryFrom};
 use std::error::Error;
 use std::sync::mpsc::Sender;
 use std::thread;
@@ -62,9 +62,9 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
     }
 }
 
-pub(crate) fn process_callback(message: &[u8], persistent_messages: Vec<MidiMessageData>, tx: Sender<Vec<MidiMessageData>>) -> Result<Vec<MidiMessageData>, Box<dyn Error>> {
-    let mut return_messages = persistent_messages.clone();
-    let midi_data = MidiMessageData::new(message[0], message[1], message[2]).unwrap();
+pub(crate) fn process_callback(message: &[u8], current_messages: Vec<MidiMessageData>, tx: Sender<Vec<MidiMessageData>>) -> Result<Vec<MidiMessageData>, Box<dyn Error>> {
+    let mut return_messages = current_messages;
+    let midi_data = MidiMessageData::new(message[0], message[1], message[2])?;
     if midi_data.should_add_midi_message() {
         // Only add if note does not already exist
         if !return_messages
@@ -83,8 +83,8 @@ pub(crate) fn process_callback(message: &[u8], persistent_messages: Vec<MidiMess
     }
 
     // Send twice to ensure Gadget thread picks up the message
-    tx.send(return_messages.clone()).unwrap();
-    tx.send(return_messages.clone()).unwrap();
+    tx.send(return_messages.clone()).map_err(|e| -> Box<dyn Error> { format!("failed to send MIDI messages (1st send): {e}").into() })?;
+    tx.send(return_messages.clone()).map_err(|e| -> Box<dyn Error> { format!("failed to send MIDI messages (2nd send): {e}").into() })?;
 
     Ok(return_messages)
 }
@@ -285,5 +285,16 @@ mod tests {
         assert_eq!(res2.len(), 1);
         let first = rx2.recv().expect("no first send");
         assert_eq!(first.len(), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incorrect MidiMessageType")]
+    fn process_callback_malformed_data_panics() {
+        let (tx, _rx) = mpsc::channel();
+        let persistent: Vec<MidiMessageData> = Vec::new();
+        // byte0 high nibble 0x0 is not a valid MidiMessageTypes
+        let bad = [0x00u8, 0x00u8, 0x00u8];
+        // process_callback currently unwraps MidiMessageData::new(), so this will panic
+        process_callback(&bad, persistent, tx).unwrap();
     }
 }
