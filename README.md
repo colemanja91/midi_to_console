@@ -1,3 +1,8 @@
+# HOSTING
+The primary working repository for this project is https://codeberg.org/colemanja91/midi_to_console
+
+The GitHub repository will remain a mirror for some time: https://github.com/colemanja91/midi_to_console
+
 # About
 
 Forked from https://github.com/Shtsh/midi_to_console
@@ -45,7 +50,22 @@ sudo apt install ./target/debian/midi-to-switch_0.1.0_arm64.deb
 ```
 After reboot everything should be up an running
 
-# Acknowledges
+**TODO**
 
-Used NS protocol analysis https://www.mzyy94.com/blog/2020/03/20/nintendo-switch-pro-controller-usb-gadget/
-Thanks Shtsh for the original work on this repo
+* Add troubleshooting steps based on https://askubuntu.com/questions/1493517/how-to-solve-could-not-execute-systemctl-at-usr-bin-deb-systemd-invoke-line-1
+* Fix script for the following (temp fix possibly powering not via USB-C):
+
+```sh
+Dec 18 20:26:08 mushroompi create_gadget_device.sh[1727]: /usr/sbin/create_gadget_device.sh: line 26: echo: write error: Device or resource busy
+Dec 18 20:26:08 mushroompi create_gadget_device.sh[1727]: /usr/sbin/create_gadget_device.sh: line 27: echo: write error: Device or resource busy
+Dec 18 20:26:08 mushroompi create_gadget_device.sh[1727]: /usr/sbin/create_gadget_device.sh: line 28: echo: write error: Device or resource busy
+Dec 18 20:26:08 mushroompi create_gadget_device.sh[1734]: /usr/sbin/create_gadget_device.sh: line 29: xxd: command not found
+Dec 18 20:26:08 mushroompi create_gadget_device.sh[1735]: ln: failed to create symbolic link 'configs/c.1/hid.usb0': File exists
+Dec 18 20:26:08 mushroompi create_gadget_device.sh[1736]: ls: write error: Device or resource busy
+```
+
+
+# Acknowledgements
+
+* Used NS protocol analysis https://www.mzyy94.com/blog/2020/03/20/nintendo-switch-pro-controller-usb-gadget/
+* Thanks Shtsh for the original work on this repo
