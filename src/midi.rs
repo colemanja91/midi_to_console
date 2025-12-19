@@ -38,16 +38,40 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
     let in_port_name = midi_in.port_name(in_port)?;
     info!("Connecting to {}", in_port_name);
 
-    let mut midi_note_on_messages: Vec<MidiMessageData> = Vec::new();
+    use std::sync::{Arc, Mutex};
+
+    // Make the persistent note-on message list shared and thread-safe so it can be
+    // inspected or modified from multiple places in future refactors.
+    let midi_note_on_messages: Arc<Mutex<Vec<MidiMessageData>>> = Arc::new(Mutex::new(Vec::new()));
+    let state_for_callback = midi_note_on_messages.clone();
 
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
     let _conn_in = midi_in.connect(
         in_port,
         "midir-read-input",
         move |_, message: &[u8], _| {
-            match process_callback(message, midi_note_on_messages.clone(), tx.clone()) {
+            // Grab a local copy of the persistent state, run the pure processing
+            // logic (process_callback) and then store the updated state back into
+            // the mutex. This keeps the mutex held only for the clone/replace
+            // and leaves the processing and sends inside process_callback to run
+            // without holding the lock for the whole time.
+            let persistent = {
+                match state_for_callback.lock() {
+                    Ok(guard) => guard.clone(),
+                    Err(poisoned) => poisoned.into_inner().clone(),
+                }
+            };
+
+            match process_callback(message, persistent, tx.clone()) {
                 Ok(value) => {
-                    midi_note_on_messages = value;
+                    // Replace the contents of the mutex with the updated state
+                    match state_for_callback.lock() {
+                        Ok(mut guard) => *guard = value,
+                        Err(poisoned) => {
+                            let mut guard = poisoned.into_inner();
+                            *guard = value;
+                        }
+                    }
                 }
                 Err(error) => {
                     error!("Error processing callback: {}", error);
