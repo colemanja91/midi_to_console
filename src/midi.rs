@@ -1,5 +1,6 @@
-use std::{convert::TryFrom};
+use std::convert::TryFrom;
 use std::error::Error;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::time::Duration;
@@ -37,8 +38,6 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
 
     let in_port_name = midi_in.port_name(in_port)?;
     info!("Connecting to {}", in_port_name);
-
-    use std::sync::{Arc, Mutex};
 
     // Make the persistent note-on message list shared and thread-safe so it can be
     // inspected or modified from multiple places in future refactors.
@@ -86,7 +85,32 @@ pub fn process_signals(position: usize, tx: Sender<Vec<MidiMessageData>>) -> Res
     }
 }
 
+
+/// Processes a single incoming MIDI message, updates the current message state,
+/// and forwards the updated state to the given channel.
+///
+/// # Parameters
+/// - `message`: A slice containing exactly three bytes of MIDI data conforming to MIDI standards
+///   The slice is expected to have length ≥ 3; the first three bytes are used.
+/// - `current_messages`: The current collection of active `MidiMessageData` entries.
+/// - `tx`: A `Sender` over which the updated list of MIDI messages is sent.
+///
+/// # Returns
+/// On success, returns the updated vector of `MidiMessageData` that represents
+/// the current active MIDI state after applying the given `message`.
+///
+/// # Errors
+/// Returns an error if:
+/// - `message` does not have the correct number of bytes
+/// - The raw `message` bytes cannot be converted into a valid `MidiMessageData`
+///   instance (as determined by `MidiMessageData::new`), or
+/// - Sending the updated MIDI message list on `tx` fails (for either of the
+///   two send attempts).
 pub(crate) fn process_callback(message: &[u8], current_messages: Vec<MidiMessageData>, tx: Sender<Vec<MidiMessageData>>) -> Result<Vec<MidiMessageData>, Box<dyn Error>> {
+    if message.len() < 3 {
+        return Err(format!("MIDI message too short: expected at least 3 bytes, got {}", message.len()).into());
+    }
+
     let mut return_messages = current_messages;
     let midi_data = MidiMessageData::new(message[0], message[1], message[2])?;
     if midi_data.should_add_midi_message() {
@@ -150,14 +174,17 @@ impl MidiMessageData {
         })
     }
 
+    /// status is NoteOn AND velocity (data_byte2) IS NOT 0
+    /// (0 is equivalent to NoteOff per MIDI standard)
     pub fn should_add_midi_message(&self) -> bool {
         self.status_byte == MidiMessageTypes::NoteOn
             && self.data_byte2 != 0x00u8
     }
 
+    /// Status is NoteOff OR Status is NoteOn and 
+    /// velocity (data_byte2) is 0
+    /// (0 is equivalent to NoteOff per MIDI standard)
     pub fn should_remove_midi_message(&self) -> bool {
-        // Velocity 0 is treated same as MidiMessageTypes::NoteOff,
-        // per MIDI spec.
         (self.status_byte == MidiMessageTypes::NoteOn && self.data_byte2 == 0x00u8)
             || self.status_byte == MidiMessageTypes::NoteOff
     }
@@ -243,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn process_callback_add_message_not_duplicated() {
+    fn process_callback_does_not_add_duplicate_messages() {
         let (tx, rx) = mpsc::channel();
         // persistent already contains the note
         let existing = MidiMessageData::new((MidiMessageTypes::NoteOn as u8) << 4, 0x3C, 0x40).unwrap();
