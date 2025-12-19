@@ -1,5 +1,6 @@
 #!/bin/bash
 
+mkdir -p /sys/kernel/config/usb_gadget/
 cd /sys/kernel/config/usb_gadget/ || exit 1
 mkdir -p procon
 cd procon
