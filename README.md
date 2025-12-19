@@ -24,15 +24,14 @@ The application uses linux-specific gadget api to emulate controller so no cross
 Instruction assumes there is Raspberry Pi OS based on Debian 11 has already been installed.
 
 ## Allowing OTP on USB-C port
-Add to the end of /boot/config.txt
+Add to the end of /boot/firmware/config.txt
 ```
 dtoverlay=dwc2
 ```
 
-Add to /etc/modules
+Add to /boot/firmware/cmdline.txt **after** `rootwait`
 ```
-dwc2
-libcomposite
+modules-load=dwc2,libcomposite
 ```
 
 ## Build and install the device
