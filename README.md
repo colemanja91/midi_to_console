@@ -50,9 +50,25 @@ sudo apt install ./target/debian/midi-to-switch_0.1.0_arm64.deb
 ```
 After reboot everything should be up an running
 
+### Troubleshooting
+
+**Could not execute systemctl: at /usr/bin/deb-systemd-invoke line 142**
+
+This is a known bug with `init-system-helpers` 
+
+Steps to try to resolve:
+* Open `/var/lib/dpkg/info/midi-to-switch.postinst`
+* Find any lines that call `deb-systemd-invoke` and comment them out
+  * If this is inside an if/then, add `echo '1'` to avoid an empty condition
+* Re-run the `sudo apt install ./target/debian/midi-to-switch.1.0_arm64.deb` above
+* Revert the changes made to `/var/lib/dpkg/info/midi-to-switch.postinst`
+* Run `sudo /lib/systemd/systemd-sysv-install enable midi-to-switch`
+
+If that doesn't work, try this:
+* `sudo systemctl start midi-to-switch`
+
 **TODO**
 
-* Add troubleshooting steps based on https://askubuntu.com/questions/1493517/how-to-solve-could-not-execute-systemctl-at-usr-bin-deb-systemd-invoke-line-1
 * Fix script for the following (temp fix possibly powering not via USB-C):
 
 ```sh
